@@ -3,6 +3,7 @@ package settle
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 	"testing"
 	"time"
@@ -370,4 +371,30 @@ func TestReconcileSubmitting_MultipleRowsResolvedIndependently(t *testing.T) {
 	if status700 != "failed" {
 		t.Errorf("700's status = %q, want failed", status700)
 	}
+}
+
+// ExampleSubmitter_Submit documents the call shape of Submitter.Submit,
+// the settle-and-record flow for one channel and amount.
+//
+// The pool is a zero-value stub, fakeChannelSettler is the package's own
+// test double for ChannelSettler, and testChannel is the package's own
+// test channel. There is no // Output: line on purpose: Submit records
+// intent in Postgres and then calls channel.Settle. Without an Output
+// line `go test` compiles the example but does not run it, so the pool is
+// never dialed and no network connection is opened. It is here to pin the
+// call shape: a signature change breaks the build. The behaviour is
+// covered by the TestSubmit_* tests above.
+func ExampleSubmitter_Submit() {
+	s := NewSubmitter(&pgxpool.Pool{})
+	channel := &fakeChannelSettler{hash: "deadbeef"}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	rec, err := s.Submit(ctx, channel, nil, testChannel, big.NewInt(5000))
+	if err != nil {
+		fmt.Println("submit:", err)
+		return
+	}
+	fmt.Println("status:", rec.Status, "tx:", rec.TxHash)
 }
